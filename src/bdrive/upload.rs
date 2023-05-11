@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 use super::BDrive;
-use crate::fs::{Upload, File, state::*};
+use crate::fs::{Upload, File, state::*, FileSuccess, SyncState, Split};
 use ssh2::Error as SSHError;
 
 impl BDrive {
@@ -12,9 +12,41 @@ impl BDrive {
         println!("local file before searching {:?}", file);
         // println!("search result: {:?}", self.get_file_file(file).await);
 
-        // match self.db.get_file_file(file).await {
-        //
-        // }
+        match self.db.get_file_file(file).await {
+            Ok(r) => match r {
+                FileSuccess::Yes(st) => {
+                    match st {
+                        SyncState::Sync(f) => {
+                            println!("file is online and synced");
+                            Ok(f)
+                        },
+                        SyncState::Diff(f) => {
+                            println!("file is uploaded but not in sync");
+                            if options.overwrite {
+                                println!("overwriting remote file");
+                                let (local, _) = f.split();
+                                upload_wrapper(
+                                    self,
+                                    local,
+                                    Some(true)
+                                ).await
+                            } else {
+                                let (local, remote) = f.split();
+                                Err(UploadError::OverwriteError(local, remote))
+                            }
+                        }
+                    }
+                }
+                FileSuccess::No(o) => {
+                    upload_wrapper(
+                        self,
+                        o,
+                        Some(false)
+                    ).await
+                }
+            }
+            Err((e, f)) => Err(UploadError::MongoDBError(f, e))
+        }.unwrap();
 
         todo!()
     }

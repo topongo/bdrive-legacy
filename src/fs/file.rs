@@ -2,13 +2,12 @@ use std::path::Path;
 use crate::db::RemoteFile;
 use super::state::*;
 
-pub trait ToRemoteFile {
+pub trait ToRemoteFile: LocalFile {
     fn to_remote_file(&self) -> RemoteFile;
 }
 
 pub trait LocalFile {
     fn path(&self) -> String;
-
 }
 
 pub trait Upload: LocalFile {
@@ -32,6 +31,12 @@ impl<S> File<S> {
             path,
             state
         }
+    }
+}
+
+impl<S> LocalFile for File<S> {
+    fn path(&self) -> String {
+        self.path.clone()
     }
 }
 
@@ -117,12 +122,6 @@ impl PartialEq for File<LocalHashed> {
     }
 }
 
-impl LocalFile for File<LocalHashed> {
-    fn path(&self) -> String {
-        self.path.clone()
-    }
-}
-
 impl Upload for File<LocalHashed> {
     fn local_identity(&self) -> Identity {
         self.state.local.clone()
@@ -139,12 +138,6 @@ impl Upload for File<LocalHashed> {
                 remote: f.state.remote
             } })
         }
-    }
-}
-
-impl LocalFile for File<Diff> {
-    fn path(&self) -> String {
-        self.path.clone()
     }
 }
 

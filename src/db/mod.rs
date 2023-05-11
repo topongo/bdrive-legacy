@@ -8,7 +8,7 @@ use mongodb::options::IndexOptions;
 use mongodb::error::Error;
 use crate::bdrive::{UploadError, UploadOptions};
 use crate::fs::state::{LocalHashed, Remote, Sync};
-use crate::fs::{File, FileSuccess, SyncState, ToRemoteFile, Split};
+use crate::fs::{File, FileSuccess, SyncState, ToRemoteFile, Split, LocalFile, Upload};
 
 #[derive(Debug)]
 pub struct Database {
@@ -36,9 +36,12 @@ impl Database {
         Ok(self.files.find_one(doc! {"path": path.to_string()}, None).await?.map(|f| f.to_local()))
     }
 
-    pub async fn get_file_file(&self, file: File<LocalHashed>) -> Result<FileSuccess<SyncState, LocalHashed>, (Error, File<LocalHashed>)> {
-        match self.get_file_path(&file.path).await {
-            Ok(r) => Ok(FileSuccess::from(r, file)),
+    pub async fn get_file_file<'a>(&self, file: impl Upload + 'a) -> Result<FileSuccess<SyncState, Box<dyn Upload + 'a>>, (Error, impl Upload)> {
+        match self.get_file_path(&file.path()).await {
+            Ok(r) => Ok(match r {
+                Some(f) => FileSuccess::Yes(file.attach_remote(f)),
+                None => FileSuccess::No(Box::new(file))
+            }),
             Err(e) => Err((e, file))
         }
     }
@@ -46,7 +49,7 @@ impl Database {
     pub async fn upload(&mut self, file: File<LocalHashed>, options: Option<UploadOptions>) -> Result<File<Sync>, UploadError> {
         async fn upload_wrapper(
             se: &mut Database,
-            file: File<LocalHashed>,
+            file: impl Upload,
             hint_existing: Option<bool>
         ) -> Result<File<Sync>, UploadError>
         {
@@ -99,7 +102,7 @@ impl Database {
                 FileSuccess::No(o) => {
                     upload_wrapper(
                         self,
-                        o,
+                        *o,
                         Some(false)
                     ).await
                 }
