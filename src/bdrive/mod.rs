@@ -1,4 +1,5 @@
 mod upload;
+mod hash;
 
 pub use upload::{UploadOptions, UploadError};
 
@@ -10,7 +11,7 @@ use crate::ssh::SSHClient;
 #[derive(Debug)]
 pub struct BDrive {
     db: Database,
-    ssh: SSHClient
+    pub ssh: SSHClient
 }
 
 impl BDrive {

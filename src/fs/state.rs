@@ -2,19 +2,7 @@ use ring::digest::{Digest, Context, SHA256};
 use std::io::{Error, Read, BufReader};
 use serde::{Serialize, Deserialize};
 use hex::ToHex;
-
-pub fn hash_reader<R: Read>(mut reader: R) -> std::io::Result<Digest> {
-    let mut context = Context::new(&SHA256);
-    let mut buffer = [0; 1024];
-    loop {
-        let count = reader.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        context.update(&buffer[..count]);
-    }
-    Ok(context.finish())
-}
+use super::hash_reader;
 
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Identity {

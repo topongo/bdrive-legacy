@@ -1,14 +1,5 @@
-use crate::fs::LocalFile;
-use super::{File, SyncState, state::*, Upload};
-
 #[derive(Debug)]
-pub enum FileSuccess<T, S> {
+pub enum FileSuccess<T, S, O> {
     Yes(T),
-    No(S)
+    No(S, O)
 }
-
-// impl FileSuccess<SyncState, LocalHashed> {
-//     pub fn from(value: Option<File<Remote>>, original: impl Upload) -> Self {
-//
-//     }
-// }

@@ -7,7 +7,7 @@ use mongodb::bson::doc;
 use mongodb::options::IndexOptions;
 use mongodb::error::Error;
 use crate::bdrive::{UploadError, UploadOptions};
-use crate::fs::state::{LocalHashed, Remote, Sync};
+use crate::fs::state::{Diff, LocalHashed, Remote, Sync};
 use crate::fs::{File, FileSuccess, SyncState, ToRemoteFile, Split, LocalFile, Upload};
 
 #[derive(Debug)]
@@ -36,93 +36,94 @@ impl Database {
         Ok(self.files.find_one(doc! {"path": path.to_string()}, None).await?.map(|f| f.to_local()))
     }
 
-    pub async fn get_file_file<'a>(&self, file: impl Upload + 'a) -> Result<FileSuccess<SyncState, Box<dyn Upload + 'a>>, (Error, impl Upload)> {
+    pub async fn get_file_file<'a>(&self, file: impl Upload + 'a) -> Result<FileSuccess<SyncState, (), Box<dyn Upload + 'a>>, (Error, impl Upload)> {
         match self.get_file_path(&file.path()).await {
             Ok(r) => Ok(match r {
                 Some(f) => FileSuccess::Yes(file.attach_remote(f)),
-                None => FileSuccess::No(Box::new(file))
+                None => FileSuccess::No((), Box::new(file))
             }),
             Err(e) => Err((e, file))
         }
     }
 
     pub async fn upload(&mut self, file: File<LocalHashed>, options: Option<UploadOptions>) -> Result<File<Sync>, UploadError> {
-        async fn upload_wrapper(
-            se: &mut Database,
-            file: impl Upload,
-            hint_existing: Option<bool>
-        ) -> Result<File<Sync>, UploadError>
-        {
-            match se.upload_file(file).await {
-                FileSuccess::Yes(s) => match se.set_hash(s.to_remote_file(), hint_existing).await {
-                    Ok(_) => Ok(s),
-                    Err(e) => {
-                        // TODO
-                        // upload has failed, so discard the operation
-                        // and delete file on remote server
-                        // ====
-
-                        let (local, _) = s.split();
-                        Err(UploadError::MongoDBError(local, e))
-                    }
-                }
-                FileSuccess::No(e) => Err(UploadError::NetworkError(e))
-            }
-        }
-
-        let options = if let Some(o) = options { o } else { UploadOptions::default() };
-        println!("local file before searching {:?}", file);
-        // println!("search result: {:?}", self.get_file_file(file).await);
-
-        match self.get_file_file(file).await {
-            Ok(r) => match r {
-                FileSuccess::Yes(st) => {
-                    match st {
-                        SyncState::Sync(f) => {
-                            println!("file is online and synced");
-                            Ok(f)
-                        },
-                        SyncState::Diff(f) => {
-                            println!("file is uploaded but not in sync");
-                            if options.overwrite {
-                                println!("overwriting remote file");
-                                let (local, _) = f.split();
-                                upload_wrapper(
-                                    self,
-                                    local,
-                                    Some(true)
-                                ).await
-                            } else {
-                                let (local, remote) = f.split();
-                                Err(UploadError::OverwriteError(local, remote))
-                            }
-                        }
-                    }
-                }
-                FileSuccess::No(o) => {
-                    upload_wrapper(
-                        self,
-                        *o,
-                        Some(false)
-                    ).await
-                }
-            }
-            Err((e, f)) => Err(UploadError::MongoDBError(f, e))
-        }
+        // async fn upload_wrapper(
+        //     se: &mut Database,
+        //     file: impl Upload,
+        //     hint_existing: Option<bool>
+        // ) -> Result<File<Sync>, UploadError>
+        // {
+        //     match se.upload_file(file).await {
+        //         FileSuccess::Yes(s) => match se.set_hash(s.to_remote_file(), hint_existing).await {
+        //             Ok(_) => Ok(s),
+        //             Err(e) => {
+        //                 // TODO
+        //                 // upload has failed, so discard the operation
+        //                 // and delete file on remote server
+        //                 // ====
+        //
+        //                 let (local, _) = s.split();
+        //                 Err(UploadError::MongoDBError(local, e))
+        //             }
+        //         }
+        //         FileSuccess::No(e, o) => Err(UploadError::NetworkError(e))
+        //     }
+        // }
+        //
+        // let options = if let Some(o) = options { o } else { UploadOptions::default() };
+        // println!("local file before searching {:?}", file);
+        // // println!("search result: {:?}", self.get_file_file(file).await);
+        //
+        // match self.get_file_file(file).await {
+        //     Ok(r) => match r {
+        //         FileSuccess::Yes(st) => {
+        //             match st {
+        //                 SyncState::Sync(f) => {
+        //                     println!("file is online and synced");
+        //                     Ok(f)
+        //                 },
+        //                 SyncState::Diff(f) => {
+        //                     println!("file is uploaded but not in sync");
+        //                     if options.overwrite {
+        //                         println!("overwriting remote file");
+        //                         let (local, _) = f.split();
+        //                         upload_wrapper(
+        //                             self,
+        //                             local,
+        //                             Some(true)
+        //                         ).await
+        //                     } else {
+        //                         let (local, remote) = f.split();
+        //                         Err(UploadError::OverwriteError(local, remote))
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //         // FileSuccess::No(_, o) => {
+        //         //     upload_wrapper(
+        //         //         self,
+        //         //         o,
+        //         //         Some(false)
+        //         //     ).await
+        //         // }
+        //     }
+        //     Err((e, f)) => Err(UploadError::MongoDBError(f, e))
+        // }
+        todo!()
     }
 
-    async fn upload_file(&self, f: File<LocalHashed>) -> FileSuccess<File<Sync>, LocalHashed> {
-        use std::thread::sleep;
-        use std::time::Duration;
-
-        // TODO
-        // upload to server, simulate by sleeping
-        // ===
-
-        sleep(Duration::from_secs(2));
-
-        FileSuccess::Yes(f.to_sync())
-    }
+    // async fn upload_file(&self, f: File<LocalHashed>) -> FileSuccess<File<Sync>, LocalHashed> {
+    //     use std::thread::sleep;
+    //     use std::time::Duration;
+    //
+    //     // TODO
+    //     // upload to server, simulate by sleeping
+    //     // ===
+    //
+    //     sleep(Duration::from_secs(2));
+    //
+    //     FileSuccess::Yes(f.to_sync())
+    // }
 
     // async fn create_file(&mut self, f: &RemoteFile) -> mongodb::error::Result<InsertOneResult> {
     //     Ok(self.files.insert_one(f, None).await?)
@@ -149,6 +150,23 @@ impl Database {
                 }
             }
         }
+    }
 
+    /// Sync a File<Diff> with database, sets remote hash to local hash
+    pub async fn push(&mut self, f: File<Diff>) -> FileSuccess<File<Sync>, mongodb::error::Error, File<Diff>> {
+        let (local, remote) = f.split();
+        let rfile = local.to_remote_file();
+        match self.files.update_one(
+            doc! {"path": rfile.path},
+            doc! {"$set": {
+                "size": rfile.size,
+                "hash": rfile.hash
+            }}, None).await {
+            Ok(_) => FileSuccess::Yes(local.to_sync()),
+            Err(e) => FileSuccess::No(e, match local.attach_remote(remote) {
+                SyncState::Sync(_) => panic!(),
+                SyncState::Diff(d) => d
+            })
+        }
     }
 }

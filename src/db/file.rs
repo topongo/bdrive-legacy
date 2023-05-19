@@ -11,7 +11,7 @@ pub struct Sync;
 pub struct RemoteFile {
     pub path: String,
     pub hash: String,
-    pub size: u64,
+    pub size: u32,
 }
 
 impl RemoteFile {

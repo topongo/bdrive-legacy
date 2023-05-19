@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::path::Path;
 use crate::db::RemoteFile;
 use super::state::*;
@@ -8,11 +9,24 @@ pub trait ToRemoteFile: LocalFile {
 
 pub trait LocalFile {
     fn path(&self) -> String;
+
+    fn size(&self) -> u64 {
+        // assume the file exists and is readable
+        Path::new(&self.path()).metadata().unwrap().len()
+    }
 }
 
-pub trait Upload: LocalFile {
+pub trait Upload: LocalFile + Debug {
     fn local_identity(&self) -> Identity;
     fn attach_remote(self, f: File<Remote>) -> SyncState;
+    fn downcast(&self) -> File<LocalHashed> {
+        File {
+            path: self.path(),
+            state: LocalHashed {
+                local: self.local_identity()
+            }
+        }
+    }
 }
 
 pub trait Split {
@@ -63,9 +77,8 @@ impl File<Local> {
 }
 
 impl File<LocalHashed> {
-    // compile this only for debug reasons, we shouldn't assume the remote is equal to local.
-    #[cfg(debug_assertions)]
-    pub fn to_sync(self) -> File<Sync> {
+    // create-public, we shouldn't assume the remote is equal to local.
+    pub(crate) fn to_sync(self) -> File<Sync> {
         File {
             path: self.path,
             state: Sync { id: self.state.local }
