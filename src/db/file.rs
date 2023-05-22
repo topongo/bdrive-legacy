@@ -15,7 +15,7 @@ pub struct RemoteFile {
 }
 
 impl RemoteFile {
-    pub fn new(path: String, hash: String, size: u64) -> Self {
+    pub fn new(path: String, hash: String, size: u32) -> Self {
         Self { path, hash, size }
     }
 

@@ -1,7 +1,8 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use crate::bdrive::UploadError::MongoDBError;
 use super::BDrive;
 use crate::fs::{Upload, File, state::*, FileSuccess, SyncState, Split, LocalFile};
-use ssh2::Error as SSHError;
+use crate::ssh::SSHError;
 
 impl BDrive {
     /// This function tries upload a file to the remote server via ssh.
@@ -25,12 +26,12 @@ impl BDrive {
                             if options.overwrite {
                                 println!("overwriting remote file");
                                 if let Err(e) = self.ssh.write(f.path(), f.size()) {
-                                    return Err(UploadError::NetworkError(f.downcast(), e))
+                                    return Err(UploadError::SSHError(f.downcast(), e))
                                 }
                                 // upload ok, update database.
-                                // todo: if fails we need to clean remote files
+                                print!("file uploaded, trying to update database...");
                                 match self.db.push(f).await {
-                                    FileSuccess::Yes(f) => Ok(f),
+                                    FileSuccess::Yes(f) => { println!("Ok, done"); Ok(f) },
                                     FileSuccess::No(e, o) => Err(UploadError::MongoDBError(self.clean_storage(o).await, e))
                                 }
                             } else {
@@ -41,11 +42,16 @@ impl BDrive {
                     }
                 }
                 FileSuccess::No((), o) => {
+                    println!("cannot find file remotely, creating new one.");
                     if let Err(e) = self.ssh.write(o.path(), o.size()) {
-                        return Err(UploadError::NetworkError(o.downcast(), e))
+                        return Err(UploadError::SSHError(o.downcast(), e))
+                    } else {
+                        println!("upload success, creating file in db.");
+                        match self.db.create(o).await {
+                            FileSuccess::Yes(s) => Ok(s),
+                            FileSuccess::No(e, o) => Err(MongoDBError(o.downcast(), e))
+                        }
                     }
-                    // todo: check if remote file is ok
-                    todo!()
                 }
             }
             Err((e, f)) => Err(UploadError::MongoDBError(f.downcast(), e))
@@ -53,10 +59,11 @@ impl BDrive {
     }
 
     async fn clean_storage(&self, f: File<Diff>) -> File<LocalHashed> {
-        // todo: actually we should check if the file existed, if so, restore the original 
+        // todo: actually we should check if the file existed, if so, restore the original
+        println!("deleting {}, since it cannot be added to database.", f.path);
         match self.ssh.delete(f.path()) {
             Ok(_) => f.downcast(),
-            Err(e) => {
+            Err(_e) => {
                 // todo: if this fails add an entry to database, when possible clean dangling files
                 f.downcast();
                 todo!()
@@ -97,7 +104,7 @@ impl UploadOptionsBuilder {
 #[derive(Debug)]
 pub enum UploadError {
     OverwriteError(File<LocalHashed>, File<Remote>),
-    NetworkError(File<LocalHashed>, ssh2::Error),
+    SSHError(File<LocalHashed>, SSHError),
     MongoDBError(File<LocalHashed>, mongodb::error::Error),
     Culo(Box<dyn Upload>)
 }

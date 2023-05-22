@@ -1,22 +1,43 @@
 use std::fmt::{Debug, Formatter};
-use ssh2::{OpenFlags, OpenType, Session, Sftp};
+use ssh2::{Error, Session, Sftp};
 use tokio::net::TcpStream;
 use std::fs::File as StdFile;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter};
+use std::os::raw::c_ulong;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
-use crate::fs::{File, FileSuccess, Upload};
-use crate::fs::state::{LocalHashed, Sync};
+use crate::conf::{PathError, PathsConf};
 
 pub struct SSHClient {
     session: Session,
-    sftp: Option<Sftp>
+    sftp: Option<Sftp>,
+    paths: PathsConf
+}
+
+#[derive(Debug)]
+pub enum SSHError {
+    SSH2(Error),
+    Path(String),
+    MkdirError(String)
+}
+
+impl From<PathError> for SSHError {
+    fn from(value: PathError) -> Self {
+        Self::Path(value.to_string())
+    }
+}
+
+impl From<ssh2::Error> for SSHError {
+    fn from(value: Error) -> Self {
+        Self::SSH2(value)
+    }
 }
 
 const BUFFSIZE: usize = 2 << 20;
 
 impl SSHClient {
-    pub fn new() -> Self {
-        Self { session: Session::new().unwrap() }
+    pub fn new(paths: PathsConf) -> Self {
+        Self { session: Session::new().unwrap(), sftp: None, paths}
     }
 
     pub async fn connect(
@@ -36,52 +57,81 @@ impl SSHClient {
         let mut errors = vec![];
         for identity in identities {
             match agent.userauth(&username, &identity) {
-                Ok(()) => return Ok(()),
+                Ok(()) => {
+                    self.session.set_blocking(true);
+                    println!("creating sftp");
+                    self.sftp = Some(self.session.sftp()?);
+                    return Ok(())
+                },
                 Err(e) => errors.push(e)
             }
         }
-        self.session.set_blocking(true);
-        self.sftp = Some(self.session.sftp()?);
 
         Err(errors.pop().unwrap())?
     }
 
-    pub fn write(&self, path: String, size: u64) -> Result<(), ssh2::Error> {
+    fn sftp(&self) -> &Sftp {
+        self.sftp.as_ref().unwrap()
+    }
+
+    pub fn write(&self, rel: String, size: u64) -> Result<(), SSHError> {
+        // todo: manage permission numbers...
         assert!(self.session.authenticated());
-        println!("calling function write({}, {})", path, size);
+        let path = self.paths.absolute(&rel)?;
+        let remote = Path::new(&self.paths.remote).join(&path);
+        println!("uploading file {:?} to {:?}", self.paths.mid_absolute(&rel).unwrap(), remote);
+
+
         let mut local_reader = BufReader::with_capacity(BUFFSIZE, StdFile::open(path.clone()).unwrap());
 
-        println!("request scp send...");
+        // println!("request scp send...");
 
-        let mut ch = BufWriter::with_capacity(BUFFSIZE, self.sftp.unwrap().create("/home/pi/test.iso".as_ref())?);
+        /// Recursively try to mkdir a folder
+        fn recursive_mkdir(s: &Sftp, mut vec: Vec<String>) -> Result<Vec<String>, SSHError> {
+            println!("recursing over {:?}", vec);
+            if vec.len() == 1 {
+                Err(SSHError::MkdirError("reached root, cannot recurse further".to_string()))
+            } else {
+                let pop = vec.pop().unwrap();
+                let join = PathBuf::from(vec.join("/"));
+                if let Err(e) = s.mkdir(&join, 0o755) {
+                    if e.message() != "no such file" {
+                        Err(SSHError::MkdirError(e.message().to_string()))
+                    } else {
+                        let mut vec = recursive_mkdir(s, vec)?;
+                        // now we know for sure that all the parent exists.
+                        vec.push(pop);
+                        println!("successfully created: {:?}", join);
+                        s.mkdir(&join, 0o755).unwrap();
+                        Ok(vec)
+                    }
+                } else {
+                    println!("successfully created: {:?}", join);
+                    Ok(vec)
+                }
+            }
+        }
 
-        // let mut ch = self.session.scp_send(, 0o655, size, None)?;
+        let remote_file = match self.sftp.as_ref().unwrap().create(remote.as_path()) {
+            Ok(f) => f,
+            Err(e) => {
+                match e.message() {
+                    "no such file" => {
+                        let remote_split: Vec<String> = remote.to_str().unwrap().split("/").map(|s| s.to_string()).collect();
+                        recursive_mkdir(self.sftp(), remote_split)?;
+                        self.sftp.as_ref().unwrap().create(remote.as_path())?
+                    }
+                    _ => Err(e)?
+                }
+            }
+        };
+
+        let mut ch = BufWriter::with_capacity(BUFFSIZE, remote_file);
 
         println!("start copying data...");
 
-        // let mut buffer: [u8; BUFFSIZE] = [0; BUFFSIZE];
-        // println!("wrote {} bytes to remote file", ch.write(&buffer).unwrap());
-        // let mut tot_r = 0;
-        // let mut r;
-        // let mut w;
         let start = Instant::now();
-        // loop {
-        //     r = local_reader.read(&mut buffer).unwrap();
-        //     if r == 0 {
-        //         if tot_r == size {
-        //             break
-        //         } else {
-        //             panic!("file partially sent! ({} instead of {} bytes)", tot_r, size);
-        //         }
-        //     } else {
-        //         tot_r += r as u64;
-        //     }
-        //     w = ch.write(&mut buffer).unwrap();
-        //     if w != r {
-        //         panic!("read {} bytes in buffer but sent only {} bytes, while reading at {}", r, w, tot_r - r as u64);
-        //     }
-        // }
-        // println!();
+
         std::io::copy(&mut local_reader, &mut ch).unwrap();
         let elapsed = start.elapsed();
         println!("operation took {:?}", elapsed);
@@ -90,9 +140,8 @@ impl SSHClient {
         Ok(())
     }
 
-    pub fn delete(&self) -> std::io::Result<()> {
-
-        todo!()
+    pub fn delete(&self, path: String) -> std::io::Result<()> {
+        return Ok(self.sftp.as_ref().unwrap().unlink(path.as_ref())?)
     }
 }
 

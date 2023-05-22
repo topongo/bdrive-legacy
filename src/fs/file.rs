@@ -16,7 +16,7 @@ pub trait LocalFile {
     }
 }
 
-pub trait Upload: LocalFile + Debug {
+pub trait Upload: LocalFile + Debug + ToRemoteFile {
     fn local_identity(&self) -> Identity;
     fn attach_remote(self, f: File<Remote>) -> SyncState;
     fn downcast(&self) -> File<LocalHashed> {
@@ -27,7 +27,15 @@ pub trait Upload: LocalFile + Debug {
             }
         }
     }
+    fn upcast(&self) -> File<Sync> {
+        File {
+            path: self.path(),
+            state: Sync { id: self.local_identity() }
+        }
+    }
 }
+
+pub type BoxedUpload = Box<dyn Upload>;
 
 pub trait Split {
     fn split(self) -> (File<LocalHashed>, File<Remote>);
@@ -151,6 +159,13 @@ impl Upload for File<LocalHashed> {
                 remote: f.state.remote
             } })
         }
+    }
+}
+
+impl ToRemoteFile for File<Diff> {
+    fn to_remote_file(&self) -> RemoteFile {
+        let id = self.local_identity();
+        RemoteFile::new(self.path(), id.hash(), id.size())
     }
 }
 

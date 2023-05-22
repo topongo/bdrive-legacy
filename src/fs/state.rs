@@ -1,5 +1,4 @@
-use ring::digest::{Digest, Context, SHA256};
-use std::io::{Error, Read, BufReader};
+use std::io::{Error, BufReader};
 use serde::{Serialize, Deserialize};
 use hex::ToHex;
 use super::hash_reader;
@@ -7,15 +6,15 @@ use super::hash_reader;
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Identity {
     hash: String,
-    size: u64
+    size: u32
 }
 
 impl Identity {
-    pub fn new(hash: String, size: u64) -> Self {
+    pub fn new(hash: String, size: u32) -> Self {
         Self { hash, size }
     }
 
-    pub fn size(&self) -> u64 { self.size }
+    pub fn size(&self) -> u32 { self.size }
     pub fn hash(&self) -> String { self.hash.clone() }
 }
 
@@ -25,7 +24,7 @@ impl TryFrom<String> for Identity {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let reader = BufReader::new(std::fs::File::open(&value)?);
         let digest = hash_reader(reader)?;
-        let size = std::fs::metadata(&value)?.len();
+        let size = std::fs::metadata(&value)?.len() as u32;
 
         Ok(Identity {
             hash: digest.encode_hex(),

@@ -1,11 +1,5 @@
-use std::fs::{read_to_string, File as StdFile};
-use std::io::Read;
-use futures::TryFutureExt;
-use mongodb::{options::{ClientOptions, ServerApi, ServerApiVersion}, Client};
-use bdrive::bdrive::BDrive;
-use bdrive::fs::{File, LocalFile};
-use bdrive::db::Database;
-use bdrive::fs::ToRemoteFile;
+use std::fs::{read_to_string};
+use bdrive::fs::File;
 
 #[tokio::main]
 async fn main() -> mongodb::error::Result<()> {
@@ -26,6 +20,11 @@ async fn main() -> mongodb::error::Result<()> {
 
     use bdrive::conf::Configs;
     use bdrive::bdrive::BDrive;
+    use bodo_connect::net::NetworkMap;
+    use bodo_connect::net::Subnet;
+
+    let nmap = NetworkMap::try_from(serde_json::from_str::<Vec<Subnet>>(&*read_to_string("/home/topongo/.config/bodoConnect/networkmap.json")?).unwrap()).unwrap();
+    nmap.wake(nmap.get_host("dell").unwrap()).await.unwrap();
 
     let configs: Configs = toml::from_str(&*read_to_string("config.toml")?).expect("AAAAAAAAH");
     println!("{:?}", configs);
