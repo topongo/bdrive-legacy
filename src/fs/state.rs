@@ -24,7 +24,7 @@ impl TryFrom<String> for Identity {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let reader = BufReader::new(std::fs::File::open(&value)?);
         let digest = hash_reader(reader)?;
-        let size = std::fs::metadata(&value)?.len() as u64;
+        let size = std::fs::metadata(&value)?.len();
 
         Ok(Identity {
             hash: digest.encode_hex(),

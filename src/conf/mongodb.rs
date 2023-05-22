@@ -17,6 +17,6 @@ impl MongoDBConfig {
         let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
         client_options.server_api = Some(server_api);
         let client = Client::with_options(client_options)?;
-        Ok(db::Database::connect(client.database("bdrive")).await?)
+        db::Database::connect(client.database("bdrive")).await
     }
 }

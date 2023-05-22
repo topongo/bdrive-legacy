@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use crate::bdrive::UploadError::MongoDBError;
 use super::BDrive;
 use crate::fs::{Upload, File, state::*, FileSuccess, SyncState, Split, LocalFile};
 use crate::ssh::SSHError;
@@ -44,12 +43,12 @@ impl BDrive {
                 FileSuccess::No((), o) => {
                     println!("cannot find file remotely, creating new one.");
                     if let Err(e) = self.ssh.write(&self.paths, o.path(), o.size()) {
-                        return Err(UploadError::SSHError(o.downcast(), e))
+                        Err(UploadError::SSHError(o.downcast(), e))
                     } else {
                         println!("upload success, creating file in db.");
                         match self.db.create(o).await {
                             FileSuccess::Yes(s) => Ok(s),
-                            FileSuccess::No(e, o) => Err(MongoDBError(o.downcast(), e))
+                            FileSuccess::No(e, o) => Err(UploadError::MongoDBError(o.downcast(), e))
                         }
                     }
                 }
@@ -72,7 +71,7 @@ impl BDrive {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct UploadOptions {
     pub overwrite: bool
 }
@@ -84,10 +83,6 @@ pub struct UploadOptionsBuilder {
 impl UploadOptions {
     pub fn builder() -> UploadOptionsBuilder {
         UploadOptionsBuilder { inner: Self::default() }
-    }
-
-    pub fn default() -> Self {
-        Self { overwrite: false }
     }
 }
 
@@ -106,7 +101,6 @@ impl UploadOptionsBuilder {
 pub enum UploadError {
     OverwriteError(File<LocalHashed>, File<Remote>),
     SSHError(File<LocalHashed>, SSHError),
-    MongoDBError(File<LocalHashed>, mongodb::error::Error),
-    Culo(Box<dyn Upload>)
+    MongoDBError(File<LocalHashed>, mongodb::error::Error)
 }
 

@@ -86,7 +86,7 @@ impl File<Local> {
 
 impl File<LocalHashed> {
     // create-public, we shouldn't assume the remote is equal to local.
-    pub(crate) fn to_sync(self) -> File<Sync> {
+    pub(crate) fn upcast(self) -> File<Sync> {
         File {
             path: self.path,
             state: Sync { id: self.state.local }

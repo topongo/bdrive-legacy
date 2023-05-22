@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use walkdir::WalkDir;
 use crate::bdrive::BDrive;
 use crate::conf::PathError;
@@ -23,10 +22,10 @@ impl BDrive {
     }
 
     fn canonicalize(&self, path: &str) -> String {
-        match path.strip_prefix("/") {
+        match path.strip_prefix('/') {
             Some(strip) => strip.to_string(),
             None => {
-                [&self.exe_path.to_str().unwrap(), path].join("/")
+                [self.exe_path.to_str().unwrap(), path].join("/")
             }
         }
     }
@@ -54,6 +53,8 @@ impl From<PathError> for PathSpecial {
         match value {
             PathError::Outbound(s) => PathSpecial::Outbound(s.to_str().unwrap().to_string()),
             PathError::Malformed(s) => PathSpecial::Malformed(s),
+            // enable this for future `PathError`s
+            #[allow(unreachable_patterns)]
             _ => PathSpecial::Unknown
         }
     }

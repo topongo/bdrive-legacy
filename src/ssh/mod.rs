@@ -117,7 +117,7 @@ impl SSHClient {
             Err(e) => {
                 match e.message() {
                     "no such file" => {
-                        let remote_split: Vec<String> = remote.to_str().unwrap().split("/").map(|s| s.to_string()).collect();
+                        let remote_split: Vec<String> = remote.to_str().unwrap().split('/').map(|s| s.to_string()).collect();
                         recursive_mkdir(self.sftp(), remote_split)?;
                         self.sftp.as_ref().unwrap().create(remote.as_path())?
                     }
@@ -148,7 +148,13 @@ impl SSHClient {
     }
 
     pub fn delete(&self, path: String) -> std::io::Result<()> {
-        return Ok(self.sftp.as_ref().unwrap().unlink(path.as_ref())?)
+        Ok(self.sftp.as_ref().unwrap().unlink(path.as_ref())?)
+    }
+}
+
+impl Default for SSHClient {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

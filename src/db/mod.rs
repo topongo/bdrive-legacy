@@ -63,7 +63,7 @@ impl Database {
             }},
             None
         ).await {
-            Ok(_) => FileSuccess::Yes(local.to_sync()),
+            Ok(_) => FileSuccess::Yes(local.upcast()),
             Err(e) => FileSuccess::No(e, match local.attach_remote(remote) {
                 SyncState::Sync(_) => panic!(),
                 SyncState::Diff(d) => d
