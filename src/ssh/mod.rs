@@ -1,9 +1,12 @@
+mod bindings;
+
+pub use bindings::SSHPathBindings;
+
 use std::fmt::{Debug, Formatter};
 use ssh2::{Error, Session, Sftp};
 use tokio::net::TcpStream;
 use std::fs::File as StdFile;
 use std::io::{BufReader, BufWriter};
-use std::os::raw::c_ulong;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use crate::conf::{PathError, PathsConf};
@@ -11,7 +14,7 @@ use crate::conf::{PathError, PathsConf};
 pub struct SSHClient {
     session: Session,
     sftp: Option<Sftp>,
-    paths: PathsConf
+    path_bindings: Option<SSHPathBindings>
 }
 
 #[derive(Debug)]
@@ -36,8 +39,8 @@ impl From<ssh2::Error> for SSHError {
 const BUFFSIZE: usize = 2 << 20;
 
 impl SSHClient {
-    pub fn new(paths: PathsConf) -> Self {
-        Self { session: Session::new().unwrap(), sftp: None, paths}
+    pub fn new() -> Self {
+        Self { session: Session::new().unwrap(), sftp: None, path_bindings: None}
     }
 
     pub async fn connect(
@@ -70,14 +73,20 @@ impl SSHClient {
         Err(errors.pop().unwrap())?
     }
 
+    pub fn bind_paths(&mut self, bindings: SSHPathBindings) {
+        self.path_bindings = Some(bindings)
+    }
+
     fn sftp(&self) -> &Sftp {
         self.sftp.as_ref().unwrap()
     }
 
+    fn paths(&self) -> &SSHPathBindings { self.path_bindings.as_ref().unwrap() }
+
     pub fn write(&self, rel: String, size: u64) -> Result<(), SSHError> {
         // todo: manage permission numbers...
         assert!(self.session.authenticated());
-        let path = self.paths.absolute(&rel)?;
+        let path = self.paths().absolute(&rel);
         let remote = Path::new(&self.paths.remote).join(&path);
         println!("uploading file {:?} to {:?}", self.paths.mid_absolute(&rel).unwrap(), remote);
 

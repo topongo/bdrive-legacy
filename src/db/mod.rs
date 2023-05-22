@@ -58,7 +58,7 @@ impl Database {
         match self.files.update_one(
             doc! {"path": rfile.path},
             doc! {"$set": {
-                "size": rfile.size,
+                "size": rfile.size as u32,
                 "hash": rfile.hash
             }},
             None
@@ -71,9 +71,10 @@ impl Database {
         }
     }
 
-    /// Add a `dyn Upload` to db, convert it to File<Sync> on success
-    pub async fn create(&mut self, f: Box<dyn Upload>) -> FileSuccess<File<Sync>, mongodb::error::Error, Box<dyn Upload>> {
+    /// Add a `dyn Upload` to db, convert it to `File<Sync>` on success
+    pub async fn create<'a>(&mut self, f: Box<dyn Upload + 'a>) -> FileSuccess<File<Sync>, mongodb::error::Error, Box<dyn Upload + 'a>> {
         let rfile = f.to_remote_file();
+        
         match self.files.insert_one(
             rfile,
             None

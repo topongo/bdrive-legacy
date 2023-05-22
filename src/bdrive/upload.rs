@@ -8,7 +8,7 @@ impl BDrive {
     /// This function tries upload a file to the remote server via ssh.
     /// If it succeeds then it tries to updates the remote database with the changes.
     /// If it fails the remote file is deleted and an UploadError is returned.
-    pub async fn upload(&mut self, file: impl Upload + Debug + Sized, options: Option<UploadOptions>) -> Result<File<Sync>, UploadError> {
+    pub async fn upload<'a>(&mut self, file: impl Upload + Debug + Sized + 'a, options: Option<UploadOptions>) -> Result<File<Sync>, UploadError> {
         let options = if let Some(o) = options { o } else { UploadOptions::default() };
         println!("local file before searching {:?}", file);
         // println!("search result: {:?}", self.get_file_file(file).await);

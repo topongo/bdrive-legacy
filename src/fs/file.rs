@@ -1,9 +1,9 @@
 use std::fmt::Debug;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use crate::db::RemoteFile;
 use super::state::*;
 
-pub trait ToRemoteFile: LocalFile {
+pub trait ToRemoteFile {
     fn to_remote_file(&self) -> RemoteFile;
 }
 
@@ -75,7 +75,7 @@ impl<S> LocalFile for File<S> {
 impl File<Local> {
     pub fn hash(self) -> Result<File<LocalHashed>, (std::io::Error, File<Local>)> {
         Ok(File {
-            state: LocalHashed::new(match Identity::try_from(self.path.clone()) {
+            state: LocalHashed::new(match Identity::try_from(self.path.to_string()) {
                 Ok(v) => v,
                 Err(e) => return Err((e, self))
             }),
@@ -121,18 +121,20 @@ impl From<RemoteFile> for File<Remote> {
     }
 }
 
-impl TryFrom<String> for File<Local> {
-    type Error = std::io::Error;
+impl From<String> for File<Local> {
+    fn from(value: String) -> Self {
+        Self {
+            path: value,
+            state: Local {}
+        }
+    }
+}
 
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let p = Path::new(&value);
-        if p.exists() && p.is_file() {
-            Ok(File {
-                state: Local::new(p.metadata()?.len()),
-                path: value
-            })
-        } else {
-            Err(Self::Error::from(std::io::ErrorKind::NotFound))
+impl From<PathBuf> for File<Local> {
+    fn from(value: PathBuf) -> Self {
+        Self {
+            path: value.to_str().unwrap().to_string(),
+            state: Local {}
         }
     }
 }

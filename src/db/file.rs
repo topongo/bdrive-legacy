@@ -11,11 +11,11 @@ pub struct Sync;
 pub struct RemoteFile {
     pub path: String,
     pub hash: String,
-    pub size: u32,
+    pub size: u64,
 }
 
 impl RemoteFile {
-    pub fn new(path: String, hash: String, size: u32) -> Self {
+    pub fn new(path: String, hash: String, size: u64) -> Self {
         Self { path, hash, size }
     }
 

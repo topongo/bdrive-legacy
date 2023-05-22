@@ -18,6 +18,11 @@ impl Display for PathError {
 impl Error for PathError {}
 
 impl PathsConf {
+    pub fn is_canonical(&self, rel: &str) -> Result<bool, PathError> {
+        let p = PathBuf::from(rel);
+        p.canonicalize().map(|f| f.starts_with(&self.local)).map_err(|e| PathError::Malformed(rel.to_string()))
+    }
+
     pub fn absolute(&self, rel: &str) -> Result<PathBuf, PathError> {
         let p = PathBuf::from(rel);
         match p.canonicalize() {
@@ -30,7 +35,7 @@ impl PathsConf {
         }
     }
 
-    pub fn mid_absolute(&self, rel: &str) -> Result<PathBuf, PathError> {
+    pub fn canonical(&self, rel: &str) -> Result<PathBuf, PathError> {
         Ok(PathBuf::from(self.absolute(rel)?.strip_prefix(&self.local).unwrap()))
     }
 
