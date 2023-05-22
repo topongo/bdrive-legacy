@@ -1,20 +1,17 @@
-mod bindings;
-
-pub use bindings::SSHPathBindings;
-
 use std::fmt::{Debug, Formatter};
 use ssh2::{Error, Session, Sftp};
 use tokio::net::TcpStream;
 use std::fs::File as StdFile;
 use std::io::{BufReader, BufWriter};
-use std::path::{Path, PathBuf};
+use std::fmt::Write;
+use std::path::PathBuf;
 use std::time::Instant;
+use indicatif::{ProgressState, ProgressStyle};
 use crate::conf::{PathError, PathsConf};
 
 pub struct SSHClient {
     session: Session,
-    sftp: Option<Sftp>,
-    path_bindings: Option<SSHPathBindings>
+    sftp: Option<Sftp>
 }
 
 #[derive(Debug)]
@@ -30,17 +27,17 @@ impl From<PathError> for SSHError {
     }
 }
 
-impl From<ssh2::Error> for SSHError {
+impl From<Error> for SSHError {
     fn from(value: Error) -> Self {
         Self::SSH2(value)
     }
 }
 
-const BUFFSIZE: usize = 2 << 20;
+const BUFF_SIZE: usize = 2 << 20;
 
 impl SSHClient {
     pub fn new() -> Self {
-        Self { session: Session::new().unwrap(), sftp: None, path_bindings: None}
+        Self { session: Session::new().unwrap(), sftp: None}
     }
 
     pub async fn connect(
@@ -73,25 +70,19 @@ impl SSHClient {
         Err(errors.pop().unwrap())?
     }
 
-    pub fn bind_paths(&mut self, bindings: SSHPathBindings) {
-        self.path_bindings = Some(bindings)
-    }
-
     fn sftp(&self) -> &Sftp {
         self.sftp.as_ref().unwrap()
     }
 
-    fn paths(&self) -> &SSHPathBindings { self.path_bindings.as_ref().unwrap() }
-
-    pub fn write(&self, rel: String, size: u64) -> Result<(), SSHError> {
+    pub fn write(&self, paths: &PathsConf, rel: String, size: u64) -> Result<(), SSHError> {
         // todo: manage permission numbers...
         assert!(self.session.authenticated());
-        let path = self.paths().absolute(&rel);
-        let remote = Path::new(&self.paths.remote).join(&path);
-        println!("uploading file {:?} to {:?}", self.paths.mid_absolute(&rel).unwrap(), remote);
+        let path = paths.absolute(&rel).unwrap();
+        let remote = paths.to_remote(&rel);
+        println!("uploading file {:?} to {:?}", paths.canonical(&rel).unwrap(), remote);
 
 
-        let mut local_reader = BufReader::with_capacity(BUFFSIZE, StdFile::open(path.clone()).unwrap());
+        let mut local_reader = BufReader::with_capacity(BUFF_SIZE, StdFile::open(path).unwrap());
 
         // println!("request scp send...");
 
@@ -135,16 +126,23 @@ impl SSHClient {
             }
         };
 
-        let mut ch = BufWriter::with_capacity(BUFFSIZE, remote_file);
+        let mut ch = BufWriter::with_capacity(BUFF_SIZE, remote_file);
+
+        let bar = indicatif::ProgressBar::new(size);
+        bar.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+            .unwrap()
+            .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
+            .progress_chars("#>-"));
+        let mut bar_reader = bar.wrap_read(&mut local_reader);
 
         println!("start copying data...");
 
         let start = Instant::now();
 
-        std::io::copy(&mut local_reader, &mut ch).unwrap();
+        std::io::copy(&mut bar_reader, &mut ch).unwrap();
         let elapsed = start.elapsed();
         println!("operation took {:?}", elapsed);
-        println!("operation performance: {} bytes/sec", size / elapsed.as_secs());
+        println!("operation performance: {:0.2} bytes/sec", size as f64 / elapsed.as_secs_f64());
 
         Ok(())
     }

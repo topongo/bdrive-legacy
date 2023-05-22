@@ -6,16 +6,17 @@ pub use upload::{UploadOptions, UploadError};
 
 use std::future::join;
 use std::path::PathBuf;
-use crate::conf::{Configs, PathError, PathsConf};
+use crate::conf::{Configs, PathsConf};
 use crate::db::Database;
-use crate::ssh::{SSHClient, SSHPathBindings};
+use crate::ssh::SSHClient;
 
 #[derive(Debug)]
 pub struct BDrive {
     db: Database,
-    ssh: SSHClient,
+    // todo: remove these pub(s)
+    pub ssh: SSHClient,
     pub paths: PathsConf,
-    path_key: PathBuf
+    exe_path: PathBuf
 }
 
 impl BDrive {
@@ -34,26 +35,13 @@ impl BDrive {
 
         let (db, ssh) = join!(t_db, t_ssh).await;
 
-        let mut bd = Self {
+        let bd = Self {
             db: db?,
             ssh: ssh?,
             paths: cfg.paths,
-            path_key: PathBuf::from(curdir)
+            exe_path: PathBuf::from(curdir)
         };
-
-        bd.bind_ssh_paths();
 
         Ok(bd)
-    }
-
-    pub fn bind_paths(&mut self) {
-        let bindings = SSHPathBindings {
-            is_canonical: Box::new(|r: &str| self.paths.is_canonical(r)),
-            absolute: Box::new(|r: &str| self.paths.absolute(r)),
-            canonical: Box::new(|r: &str| self.paths.canonical(r)),
-            to_remote: Box::new(|r: &str| self.paths.to_remote(r))
-        };
-
-        self.ssh.bind_paths(bindings);
     }
 }

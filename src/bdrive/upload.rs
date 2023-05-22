@@ -25,7 +25,7 @@ impl BDrive {
                             println!("file is uploaded but not in sync");
                             if options.overwrite {
                                 println!("overwriting remote file");
-                                if let Err(e) = self.ssh.write(f.path(), f.size()) {
+                                if let Err(e) = self.ssh.write(&self.paths, f.path(), f.size()) {
                                     return Err(UploadError::SSHError(f.downcast(), e))
                                 }
                                 // upload ok, update database.
@@ -43,7 +43,7 @@ impl BDrive {
                 }
                 FileSuccess::No((), o) => {
                     println!("cannot find file remotely, creating new one.");
-                    if let Err(e) = self.ssh.write(o.path(), o.size()) {
+                    if let Err(e) = self.ssh.write(&self.paths, o.path(), o.size()) {
                         return Err(UploadError::SSHError(o.downcast(), e))
                     } else {
                         println!("upload success, creating file in db.");
@@ -72,6 +72,7 @@ impl BDrive {
     }
 }
 
+#[derive(Clone)]
 pub struct UploadOptions {
     pub overwrite: bool
 }

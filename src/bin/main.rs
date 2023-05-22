@@ -1,10 +1,11 @@
 use std::fs::{read_to_string};
+use bdrive::bdrive::UploadOptions;
 
 #[tokio::main]
 async fn main() -> mongodb::error::Result<()> {
     // let f1 = File::try_from("test.iso".to_string())?;
     // let f2 = File::try_from("test.iso".to_string())?;
-    println!("hashing f1");
+    // println!("hashing f1");
     // let f1 = f1.hash().map_err(|(e, f)| {
     //     eprintln!("Error while hashing f ({:?}): ", f);
     //     e
@@ -32,33 +33,29 @@ async fn main() -> mongodb::error::Result<()> {
 
     let mut bd = BDrive::new(configs).await?;
 
-    let f = bd.load_local_file("test.iso").unwrap();
-    println!("CWD: {:?}", std::env::current_dir());
-    let mut cwd = std::env::current_dir().unwrap();
-    for i in ["documents", "rust", "bdrive"] {
-        println!("{:?} exists? {}", cwd, cwd.exists());
-        cwd.push(i);
-    }
-    let f = f.hash().unwrap();
+    // for i in ["test.iso", "/documents/rust/bdrive/test2.iso"] {
+    //     let f = bd.load_file(i).unwrap();
+    //     let f = f.hash().unwrap();
+    //     println!("{:?}", bd.upload(f, )).await);
+    // }
 
-    println!("{:?}", bd.upload(f, None).await);
+    let overwrite = Some(UploadOptions::builder().overwrite(true).build());
+
+    for f in bd.scan_dir("src").unwrap() {
+        println!("=> Found: {:?}", f);
+        match f {
+            Ok(f) => {
+                println!("=> Is file, hashing it...");
+                let f = f.hash().unwrap();
+                println!("=> and then upload it!");
+                println!("=> DONE! (result: {:?})", bd.upload(f, overwrite.clone()).await);
+            }
+            Err(e) => {
+                println!("=> Not a file: {:?}", e);
+            }
+        }
+    }
+
 
     return Ok(());
-
-    // let mut bd = BDrive::connect(client.database("test")).await?;
-    //
-    // if bd.exists("test.iso").await? {
-    //     println!("{:?}", bd.upload(
-    //         f1,
-    //         Some(
-    //             UploadOptions::builder()
-    //                 .overwrite(true)
-    //                 .build()
-    //         )).await);
-    // } else {
-    //     println!("file doesn't exists remotely, creating it.");
-    //     println!("{:?}", bd.upload(f1, None).await);
-    // }
-    //
-    // Ok(())
 }

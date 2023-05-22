@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use crate::conf::PathsConf;
 
 #[derive(Debug)]
@@ -20,7 +20,7 @@ impl Error for PathError {}
 impl PathsConf {
     pub fn is_canonical(&self, rel: &str) -> Result<bool, PathError> {
         let p = PathBuf::from(rel);
-        p.canonicalize().map(|f| f.starts_with(&self.local)).map_err(|e| PathError::Malformed(rel.to_string()))
+        p.canonicalize().map(|f| f.starts_with(&self.local)).map_err(|_| PathError::Malformed(rel.to_string()))
     }
 
     pub fn absolute(&self, rel: &str) -> Result<PathBuf, PathError> {
@@ -40,7 +40,6 @@ impl PathsConf {
     }
 
     pub fn to_remote(&self, rel: &str) -> PathBuf {
-        let p = Path::new(&rel);
-        p.join(Path::new(&self.remote))
+        [&self.remote, rel].iter().collect::<PathBuf>()
     }
 }

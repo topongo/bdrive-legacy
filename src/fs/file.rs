@@ -130,6 +130,15 @@ impl From<String> for File<Local> {
     }
 }
 
+impl From<&str> for File<Local> {
+    fn from(value: &str) -> Self {
+        Self {
+            path: value.to_string(),
+            state: Local {}
+        }
+    }
+}
+
 impl From<PathBuf> for File<Local> {
     fn from(value: PathBuf) -> Self {
         Self {
