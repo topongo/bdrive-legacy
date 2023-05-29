@@ -1,3 +1,5 @@
+use bdrive::fs::LocalFile;
+
 #[tokio::main]
 async fn main() -> mongodb::error::Result<()> {
     use std::fs::{read_to_string};
@@ -12,7 +14,7 @@ async fn main() -> mongodb::error::Result<()> {
 
     let mut bd = BDrive::new(configs).await?;
 
-    let overwrite = Some(UploadOptions::builder().overwrite(true).build());
+    let options = Some(UploadOptions::builder().overwrite(true).build());
 
     // upload this code for testing out the scan dir
     for f in bd.scan_dir("src").unwrap() {
@@ -22,7 +24,7 @@ async fn main() -> mongodb::error::Result<()> {
                 println!("=> Is file, hashing it...");
                 let f = f.hash().unwrap();
                 println!("=> and then upload it!");
-                println!("=> DONE! (result: {:?})", bd.upload(f, overwrite.clone()).await);
+                println!("=> DONE! (result: {:?})", bd.upload(f, options.clone()).await);
             }
             Err(e) => {
                 println!("=> Not a file: {:?}", e);

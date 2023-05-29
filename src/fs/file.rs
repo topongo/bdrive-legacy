@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use crate::db::RemoteFile;
 use super::state::*;
@@ -13,6 +14,10 @@ pub trait LocalFile {
     fn size(&self) -> u64 {
         // assume the file exists and is readable
         Path::new(&self.path()).metadata().unwrap().len()
+    }
+
+    fn mtime(&self) -> i64 {
+        Path::new(&self.path()).metadata().unwrap().mtime()
     }
 }
 
@@ -30,7 +35,7 @@ pub trait Upload: LocalFile + Debug + ToRemoteFile {
     fn upcast(&self) -> File<Sync> {
         File {
             path: self.path(),
-            state: Sync { id: self.local_identity() }
+            state: Sync { id: self.local_identity(), r_mtime: self.mtime() }
         }
     }
 }
@@ -87,28 +92,39 @@ impl File<Local> {
 impl File<LocalHashed> {
     // create-public, we shouldn't assume the remote is equal to local.
     pub(crate) fn upcast(self) -> File<Sync> {
+        let r_mtime = self.mtime();
         File {
             path: self.path,
-            state: Sync { id: self.state.local }
+            state: Sync { id: self.state.local, r_mtime }
         }
     }
 }
 
 impl ToRemoteFile for File<LocalHashed> {
     fn to_remote_file(&self) -> RemoteFile {
-        RemoteFile::new(self.path.clone(), self.state.local.hash(), self.state.local.size())
+        RemoteFile::new(self.path.clone(), self.state.local.hash(), self.state.local.size(), self.mtime())
     }
 }
 
 impl ToRemoteFile for File<Remote> {
     fn to_remote_file(&self) -> RemoteFile {
-        RemoteFile::new(self.path.clone(), self.state.remote.hash(), self.state.remote.size())
+        RemoteFile::new(
+            self.path.clone(),
+            self.state.remote.hash(),
+            self.state.remote.size(),
+            self.mtime()
+        )
     }
 }
 
 impl ToRemoteFile for File<Sync> {
     fn to_remote_file(&self) -> RemoteFile {
-        RemoteFile::new(self.path.to_string(), self.state.id.hash(), self.state.id.size())
+        RemoteFile::new(
+            self.path.to_string(),
+            self.state.id.hash(),
+            self.state.id.size(),
+            self.mtime()
+        )
     }
 }
 
@@ -116,7 +132,7 @@ impl From<RemoteFile> for File<Remote> {
     fn from(value: RemoteFile) -> Self {
         Self {
             path: value.path,
-            state: Remote { remote: Identity::new(value.hash, value.size) }
+            state: Remote { remote: Identity::new(value.hash, value.size), mtime: value.mtime }
         }
     }
 }
@@ -163,11 +179,12 @@ impl Upload for File<LocalHashed> {
         assert_eq!(f.path, self.path);
 
         if self.state.local == f.state.remote {
-            SyncState::Sync(File { state: Sync { id: self.state.local }, path: self.path })
+            SyncState::Sync(File { state: Sync { id: self.state.local, r_mtime: f.state.mtime }, path: self.path })
         } else {
             SyncState::Diff(File { path: self.path, state: Diff {
                 local: self.state.local,
-                remote: f.state.remote
+                remote: f.state.remote,
+                r_mtime: f.state.mtime
             } })
         }
     }
@@ -176,7 +193,7 @@ impl Upload for File<LocalHashed> {
 impl ToRemoteFile for File<Diff> {
     fn to_remote_file(&self) -> RemoteFile {
         let id = self.local_identity();
-        RemoteFile::new(self.path(), id.hash(), id.size())
+        RemoteFile::new(self.path(), id.hash(), id.size(), self.mtime())
     }
 }
 
@@ -190,11 +207,12 @@ impl Upload for File<Diff> {
         assert_eq!(f.path, self.path);
 
         if self.state.local == f.state.remote {
-            SyncState::Sync(File { state: Sync { id: self.state.local }, path: self.path })
+            SyncState::Sync(File { state: Sync { id: self.state.local, r_mtime: f.state.mtime }, path: self.path })
         } else {
             SyncState::Diff(File { path: self.path, state: Diff {
                 local: self.state.local,
-                remote: f.state.remote
+                remote: f.state.remote,
+                r_mtime: f.state.mtime
             } })
         }
     }
@@ -208,7 +226,7 @@ impl Split for File<Diff> {
         },
          File {
              path: self.path,
-             state: Remote { remote: self.state.remote }
+             state: Remote { remote: self.state.remote, mtime: self.state.r_mtime}
          })
     }
 }
@@ -221,7 +239,7 @@ impl Split for File<Sync> {
         },
          File {
              path: self.path,
-             state: Remote { remote: self.state.id }
+             state: Remote { remote: self.state.id, mtime: self.state.r_mtime }
          })
     }
 }

@@ -39,11 +39,11 @@ pub struct Local;
 #[derive(PartialEq, Debug)]
 pub struct LocalHashed { pub local: Identity }
 #[derive(PartialEq, Debug)]
-pub struct Remote { pub remote: Identity }
+pub struct Remote { pub remote: Identity, pub mtime: i64 }
 #[derive(PartialEq, Debug)]
-pub struct Sync { pub id: Identity }
+pub struct Sync { pub id: Identity, pub r_mtime: i64 }
 #[derive(PartialEq, Debug)]
-pub struct Diff { pub local: Identity, pub remote: Identity }
+pub struct Diff { pub local: Identity, pub remote: Identity, pub r_mtime: i64 }
 
 impl LocalHashed {
     pub fn new(id: Identity) -> Self {

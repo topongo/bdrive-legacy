@@ -9,7 +9,7 @@ impl BDrive {
     /// If it fails the remote file is deleted and an UploadError is returned.
     pub async fn upload<'a>(&mut self, file: impl Upload + Debug + Sized + 'a, options: Option<UploadOptions>) -> Result<File<Sync>, UploadError> {
         let options = if let Some(o) = options { o } else { UploadOptions::default() };
-        println!("local file before searching {:?}", file);
+        // println!("local file before searching {:?}", file);
         // println!("search result: {:?}", self.get_file_file(file).await);
 
         match self.db.get_file_file(file).await {
@@ -33,6 +33,8 @@ impl BDrive {
                                     FileSuccess::Yes(f) => { println!("Ok, done"); Ok(f) },
                                     FileSuccess::No(e, o) => Err(UploadError::MongoDBError(self.clean_storage(o).await, e))
                                 }
+                            } else if options.confirm {
+                                Err(UploadError::ConfirmationNeeded(f))
                             } else {
                                 let (local, remote) = f.split();
                                 Err(UploadError::OverwriteError(local, remote))
@@ -73,7 +75,8 @@ impl BDrive {
 
 #[derive(Clone, Default)]
 pub struct UploadOptions {
-    pub overwrite: bool
+    pub overwrite: bool,
+    pub confirm: bool
 }
 
 pub struct UploadOptionsBuilder {
@@ -92,6 +95,11 @@ impl UploadOptionsBuilder {
         self
     }
 
+    pub fn confirm(mut self, confirm: bool) -> UploadOptionsBuilder {
+        self.inner.confirm = confirm;
+        self
+    }
+
     pub fn build(self) -> UploadOptions {
         self.inner
     }
@@ -101,6 +109,7 @@ impl UploadOptionsBuilder {
 pub enum UploadError {
     OverwriteError(File<LocalHashed>, File<Remote>),
     SSHError(File<LocalHashed>, SSHError),
-    MongoDBError(File<LocalHashed>, mongodb::error::Error)
+    MongoDBError(File<LocalHashed>, mongodb::error::Error),
+    ConfirmationNeeded(File<Diff>)
 }
 

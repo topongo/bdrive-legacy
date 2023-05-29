@@ -1,3 +1,4 @@
+use std::time::SystemTime;
 use serde::{Serialize, Deserialize};
 use crate::fs::File;
 use crate::fs::state::Remote;
@@ -12,11 +13,12 @@ pub struct RemoteFile {
     pub path: String,
     pub hash: String,
     pub size: u64,
+    pub mtime: i64
 }
 
 impl RemoteFile {
-    pub fn new(path: String, hash: String, size: u64) -> Self {
-        Self { path, hash, size }
+    pub fn new(path: String, hash: String, size: u64, mtime: i64) -> Self {
+        Self { path, hash, size, mtime }
     }
 
     // pub fn push(self, c: &mut Collection<Self>) {
